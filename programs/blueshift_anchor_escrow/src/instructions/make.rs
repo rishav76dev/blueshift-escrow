@@ -1,19 +1,32 @@
 use anchor_lang::prelude::*;
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token_interface::{
+     Mint, TokenAccount, transfer_checked, TransferChecked, TokenInterface,
+    },
+};
 
+use crate::state::Escrow;
+
+
+
+// This struct defines the accounts required for the `make` instruction
+#[derive(Accounts)]
 #[instruction(seed: u64)]
 pub struct Make<'info> {
   #[account(mut)]
   pub maker: Signer<'info>,
 
-  #[account(
+  #[account(// The escrow account that will hold details about this trade
     init,
-    seeds = [b"escrow", maker.key().as_ref, seed.to_le_bytes().as_ref()],
+    seeds = [b"escrow", maker.key().as_ref(), seed.to_le_bytes().as_ref()],
     bump,
     payer = maker,
     space = Escrow::INIT_SPACE + Escrow::DISCRIMINATOR.len(),
   )]
   pub escrow: Account<'info, Escrow>,
 
+  // The two mints involved in the escrow trade
   #[account(
     mint::token_program = token_program
   )]
@@ -24,8 +37,19 @@ pub struct Make<'info> {
   )]
   pub mint_b: InterfaceAccount<'info, Mint>,
 
+  // The maker's token account for mint_a (from which tokens will be deposited)
   #[account(
     mut,
+    associated_token::mint = mint_a,
+    associated_token::authority = maker,
+    associated_token::token_program = token_program
+  )]
+  pub maker_ata_a: InterfaceAccount<'info, TokenAccount>,
+
+  // Vault account owned by the escrow where tokens will be temporarily stored
+  #[account(
+    init,
+    payer = maker,
     associated_token::mint = mint_a,
     associated_token::authority = escrow,
     associated_token::token_program = token_program
@@ -39,7 +63,8 @@ pub struct Make<'info> {
 
 
 impl<'info> Make<'info> {
-  fn populate_escrow(&mut self, seed: u64, amount: u64, bump: u8) -> Result<()> {
+  // This function populates the escrow account with initial data
+  pub fn populate_escrow(&mut self, seed: u64, amount: u64, bump: u8) -> Result<()> {
     self.escrow.set_inner(Escrow{
       seed,
       maker: self.maker.key(),
@@ -50,8 +75,8 @@ impl<'info> Make<'info> {
     });
     Ok(())
   }
-
-  fn deposit_tokens(&self, amount: u64) -> Result<()> {
+  // This function transfers tokens from the maker to the escrow vault
+  pub fn deposit_tokens(&self, amount: u64) -> Result<()> {
         transfer_checked(
             CpiContext::new(
                 self.token_program.to_account_info(),

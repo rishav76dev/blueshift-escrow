@@ -1,17 +1,36 @@
 use anchor_lang::prelude::*;
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token_interface::{
+     Mint, TokenAccount, close_account, CloseAccount, transfer_checked, TransferChecked,TokenInterface,
+    },
+};
+
+// Import EscrowError from its module (update the path if needed)
+use crate::error::EscrowError;
+use crate::state::Escrow;
 
 #[derive(Accounts)]
 pub struct Take<'info> {
+    /// The taker is the user who wants to take the escrow trade.
+    /// Needs to be a signer because they'll initiate token transfers.
   #[account(mut)]
   pub taker: Signer<'info>,
 
+  /// The maker is the person who created the escrow.
+    /// We mark it as `mut` so we can receive SOL from closing accounts.
   #[account(mut)]
   pub maker: SystemAccount<'info>,
 
+  /// The Escrow account that holds the trade info.
+  /// It has several checks:
+  /// - `close = maker` → when escrow is done, close it and send lamports to maker.
+  /// - `seeds` and `bump` → PDA for deterministic signing.
+    /// - `has_one` checks → ensures the escrow account actually references the correct maker and mints.
  #[account(
   mut,
   close = maker,
-  seeds = [b"escrow", maker.key().as_ref(), escrow.seed.to_le_bytes.as_ref()],
+  seeds = [b"escrow", maker.key().as_ref(), escrow.seed.to_le_bytes().as_ref()],
   bump = escrow.bump,
   has_one = maker @ EscrowError::InvalidMaker,
   has_one = mint_a @ EscrowError::InvalidMintA,
@@ -22,6 +41,8 @@ pub struct Take<'info> {
  pub mint_a: Box<InterfaceAccount<'info, Mint>>,
  pub mint_b: Box<InterfaceAccount<'info, Mint>>,
 
+ /// Vault account that holds Token A from the maker
+/// This is owned by the escrow PDA.
  #[account(
   mut,
   associated_token::mint = mint_a,
@@ -30,8 +51,27 @@ pub struct Take<'info> {
  )]
  pub vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
- pub taker_ata_a: Box<InterfaceAccount<'info, TokenAccount>>,
+ /// Taker's ATA (Associated Token Account) for receiving Token A
+    /// If it doesn't exist, create it automatically (`init_if_needed`)
+ #[account(
+      init_if_needed,
+      payer = taker,
+      associated_token::mint = mint_a,
+      associated_token::authority = taker,
+      associated_token::token_program = token_program
+  )]
+  pub taker_ata_a: Box<InterfaceAccount<'info, TokenAccount>>,
 
+  /// Taker's ATA for sending Token B to the maker
+  #[account(
+      mut,
+      associated_token::mint = mint_b,
+      associated_token::authority = taker,
+      associated_token::token_program = token_program
+  )]
+  pub taker_ata_b: Box<InterfaceAccount<'info, TokenAccount>>,
+
+  /// Maker's ATA for receiving Token B from the taker
  #[account(
       init_if_needed,
       payer = taker,
@@ -49,7 +89,8 @@ pub struct Take<'info> {
 
 
 impl<'info> Take<'info> {
-    fn transfer_to_maker(&mut self) -> Result<()> {
+    /// Transfers Token B from the taker to the maker
+    pub fn transfer_to_maker(&mut self) -> Result<()> {
         transfer_checked(
             CpiContext::new(
                 self.token_program.to_account_info(),
@@ -60,14 +101,14 @@ impl<'info> Take<'info> {
                     authority: self.taker.to_account_info(),
                 },
             ),
-            self.escrow.receive,
-            self.mint_b.decimals,
+            self.escrow.receive, // Amount of Token B to send
+            self.mint_b.decimals,       // Decimal precision for Token B
         )?;
 
         Ok(())
     }
 
-    fn withdraw_and_close_vault(&mut self) -> Result<()> {
+    pub fn withdraw_and_close_vault(&mut self) -> Result<()> {
         // Create the signer seeds for the Vault
         let signer_seeds: [&[&[u8]]; 1] = [&[
             b"escrow",
@@ -92,7 +133,7 @@ impl<'info> Take<'info> {
             self.mint_a.decimals,
         )?;
 
-        // Close the Vault
+        // Close the Vaultand send SOL to the maker
         close_account(CpiContext::new_with_signer(
             self.token_program.to_account_info(),
             CloseAccount {

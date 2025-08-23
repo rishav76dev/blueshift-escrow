@@ -1,9 +1,11 @@
 use anchor_lang::prelude::*;
 
-mod state;
-mod error;
-mod instructions;
-use instructions::*;
+pub mod state;
+pub mod error;
+pub mod instructions;
+pub use instructions::*;
+use crate::error::EscrowError;
+
 
 declare_id!("22222222222222222222222222222222222222222222");
 
@@ -39,7 +41,7 @@ pub mod blueshift_anchor_escrow {
 
     #[instruction(discriminator = 2)]
     pub fn refund(ctx: Context<Refund>) -> Result<()> {
-        //...
+        ctx.accounts.process_refund()?;
 Ok(())
     }
 }
