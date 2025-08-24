@@ -22,7 +22,8 @@ pub struct Refund<'info> {
    pub escrow: Box<Account<'info, Escrow>>,
 
   #[account(
-    mut,
+    init_if_needed,
+        payer = maker,
     associated_token::mint = mint_a,
     associated_token::authority = maker,
     associated_token::token_program = token_program
@@ -38,7 +39,7 @@ pub struct Refund<'info> {
   pub vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
   pub mint_a: Box<InterfaceAccount<'info, Mint>>,
- 
+
 
   pub associated_token_program: Program<'info, AssociatedToken>,
   pub token_program: Interface<'info, TokenInterface>,
