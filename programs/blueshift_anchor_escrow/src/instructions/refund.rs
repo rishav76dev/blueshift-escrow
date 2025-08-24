@@ -23,9 +23,9 @@ pub struct Refund<'info> {
 
   #[account(
     init_if_needed,
-        payer = maker,
+    payer = maker,
     associated_token::mint = mint_a,
-    associated_token::authority = maker,
+    associated_token::authority = escrow,
     associated_token::token_program = token_program
   )]
   pub maker_ata_a: Box<InterfaceAccount<'info, TokenAccount>>,
