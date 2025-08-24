@@ -7,7 +7,7 @@ use anchor_spl::{
 };
 
 use crate::state::Escrow;
-
+use crate::error::EscrowError;
 
 
 // This struct defines the accounts required for the `make` instruction
@@ -91,9 +91,19 @@ impl<'info> Make<'info> {
             self.mint_a.decimals,
         )?;
       Ok(())
-
-
   }
 
 
+}
+
+pub fn handler(ctx: Context<Make>, seed: u64, receive: u64, amount: u64) -> Result<()> {
+    require!(receive > 0, EscrowError::InvalidAmount);
+    require!(amount > 0, EscrowError::InvalidAmount);
+
+    ctx.accounts
+        .populate_escrow(seed, receive, ctx.bumps.escrow)?;
+
+    ctx.accounts.deposit_tokens(amount)?;
+
+    Ok(())
 }

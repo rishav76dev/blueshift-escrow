@@ -84,3 +84,9 @@ pub fn process_refund(&mut self) -> Result<()> {
 Ok(())
 }
 }
+
+pub fn handler(ctx: Context<Refund>) -> Result<()> {
+    // Withdraw and close the Vault (Vault -> Maker)
+    ctx.accounts.process_refund()?;
+    Ok(())
+}

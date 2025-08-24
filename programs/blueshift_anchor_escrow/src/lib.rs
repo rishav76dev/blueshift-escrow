@@ -1,10 +1,11 @@
+#![allow(unexpected_cfgs)]
 use anchor_lang::prelude::*;
 
 pub mod state;
 pub mod error;
 pub mod instructions;
 pub use instructions::*;
-use crate::error::EscrowError;
+
 
 
 declare_id!("22222222222222222222222222222222222222222222");
@@ -16,32 +17,20 @@ pub mod blueshift_anchor_escrow {
     #[instruction(discriminator = 0)]
     pub fn make(ctx: Context<Make>, seed: u64, receive: u64, amount: u64) -> Result<()> {
         //...
-         require_gt!(receive, 0, EscrowError::InvalidAmount);
-    require_gt!(amount, 0, EscrowError::InvalidAmount);
-
     // Save the Escrow Data
-    ctx.accounts.populate_escrow(seed, receive, ctx.bumps.escrow)?;
+    make::handler(ctx, seed, receive, amount)
 
-    // Deposit Tokens
-    ctx.accounts.deposit_tokens(amount)?;
-
-    Ok(())
     }
 
     #[instruction(discriminator = 1)]
     pub fn take(ctx: Context<Take>) -> Result<()> {
         //...
-        ctx.accounts.transfer_to_maker()?;
+        take::handler(ctx)
 
-    // Withdraw and close the Vault
-    ctx.accounts.withdraw_and_close_vault()?;
-
-    Ok(())
     }
 
     #[instruction(discriminator = 2)]
     pub fn refund(ctx: Context<Refund>) -> Result<()> {
-        ctx.accounts.process_refund()?;
-Ok(())
+        refund::handler(ctx)
     }
 }

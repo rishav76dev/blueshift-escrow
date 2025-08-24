@@ -147,3 +147,12 @@ impl<'info> Take<'info> {
         Ok(())
     }
 }
+
+
+pub fn handler(ctx: Context<Take>) -> Result<()> {
+    ctx.accounts.transfer_to_maker()?;
+
+    ctx.accounts.withdraw_and_close_vault()?;
+
+    Ok(())
+}
